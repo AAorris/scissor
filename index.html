@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,
+     initial-scale=1.0">
+    <title>Scissor</title>
+    <style>
+        body > * {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+        img {
+            object-fit: scale-down;
+        }
+    </style>
+</head>
+<body style="background:black; margin:0">
+    <canvas id="result" style="display: hidden"></canvas>
+    <img id="image" />
+    <canvas id="canvas"></canvas>
+    <input id="picker" type="file" style="display: block; padding: 20px" />
+    <script>
+        /* Canvas resize */
+        const { innerWidth, innerHeight } = window
+        Object.assign(canvas, {width: innerWidth, height: innerHeight})
+        Object.assign(result, {width: innerWidth, height: innerHeight})
+        const ctx = canvas.getContext('2d')
+
+        /* Image loading */
+        const toBase64 = file => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+        });
+
+        async function loadImage() {
+            image.onload = () => {
+                image.style.display = 'none'
+                ctx.drawImage(image, 0, 0);
+            }
+            image.src = (await toBase64(picker.files[0]));
+            picker.style.pointerEvents = 'none'
+            picker.style.display = 'none'
+        }
+
+        picker.onchange = loadImage
+
+        let events = []
+        let drawing = false
+        canvas.onmousedown = () => {
+            drawing = true
+            events = new Array()
+        }
+        canvas.onmousemove = event => {
+            if (!drawing) return
+            if (events.length === 0) {
+                events.push(event)
+                return
+            }
+            const latest = events[events.length - 1]
+            const dx = Math.pow(event.offsetX - latest.offsetX, 2)
+            const dy = Math.pow(event.offsetY - latest.offsetY, 2)
+            if (dx + dy > 100) {
+                events.push(event)
+                ctx.fillRect(latest.offsetX, latest.offsetY, 5, 5)
+            }
+        }
+        canvas.onmouseup = event => {
+            drawing = false
+            ctx.clearRect(0, 0, canvas.width, canvas.height)
+            let moved = false;
+            ctx.save()
+            ctx.beginPath()
+            for (const event of events) {
+                const op = (...x) => moved ? ctx.lineTo(...x) : ctx.moveTo(...x);
+                op(event.offsetX, event.offsetY)
+                moved = true
+            }
+            ctx.closePath()
+            ctx.clip()
+            ctx.drawImage(image, 0, 0);
+            ctx.restore()
+
+
+            const xItems = events.map(v => v.offsetX)
+            const yItems = events.map(v => v.offsetY)
+            const minX = Math.min(...xItems)
+            const minY = Math.min(...yItems)
+            const maxX = Math.max(...xItems)
+            const maxY = Math.max(...yItems)
+            const width = maxX - minX
+            const height = maxY - minY
+
+            result.width = width
+            result.height = height
+            result.getContext('2d').drawImage(
+                canvas,
+                minX,
+                minY,
+                width,
+                height,
+                0,
+                0,
+                width,
+                height,
+            )
+            image.onload = null
+            image.src = result.toDataURL("image/png")
+            image.style.display = 'block'
+            canvas.style.display = 'none'
+            result.style.display = 'none'
+        }
+
+        /* Polygon making */
+    </script>
+</body>
+</html>
